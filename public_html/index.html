@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<!--Práctica 3 Sergio Fernández Quidiello y Pablo López Pérez-Esparza
+-->
+<html>
+    <head>
+        <title>Arkanoid</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            canvas{
+                margin: 0 px;
+                padding: 0 px;
+                border: 1px solid black;
+                background-color: darkblue;
+            }
+            #info{
+                background-color: bisque;
+            }
+        </style>
+    </head>
+    <body style="background-color: chocolate">
+        <p>Proyecto realizado por Sergio Fernández Quidiello y Pablo López Pérez-Esparza</p>
+        <p>Bibliografía utilizada:
+            <br/>Música del juego recuperada de: <a href="https://www.youtube.com/watch?v=m0aAKIQI9HA">https://www.youtube.com/watch?v=m0aAKIQI9HA</a>
+            <br/>Para mas información sobre el juego: <a href="https://es.wikipedia.org/wiki/Arkanoid">https://es.wikipedia.org/wiki/Arkanoid</a>
+        </p>
+        <div>            
+            <canvas id="pantalla" width="442" height="470">Tu navegador no soporta canvas</canvas>
+            <canvas id="info" width="442" height="470"></canvas>
+        </div>
+        
+        <!--Para poder corregir/revisar mejor el nivel 2 sin necesidad de hacer el nivel 1 de nuevo-->
+        <p>Para poder corregir mejor el nivel 2==><button onclick="nivel2()">Nivel 2</button></p>
+        
+        <audio id="rebote"><source src="Colision.mp3"/></audio>
+        <audio id="intro"><source src="Intro_Nivel.mp3"/></audio>
+        <audio id="roto"><source src="Ladrillo_roto.mp3"/></audio>
+        <audio id="over"><source src="Game_Over.mp3"/></audio>
+        <script>
+            "use strict";
+            //canvas
+            var contexto = document.getElementById("pantalla").getContext("2d");
+            var info = document.getElementById("info").getContext("2d");
+            document.getElementById("pantalla").addEventListener("mousemove", raton, true);
+            document.getElementById("pantalla").addEventListener("click", raton, true);
+            //canvas de información del juego
+            info.font = "30px Impact";
+            info.fillText("Arkanoid", 150, 40);
+            info.font = "15px Georgia";
+            info.fillText("Taito desarrolló Arkanoid en 1986.", 10, 80);
+            info.fillText("El jugador controla una pequeña plataforma, conocida como", 10, 100);
+            info.fillText("\"Nave Espacial Vaus\", que impide que una bola salga de la", 10, 120);
+            info.fillText("zona de juego, haciéndola rebotar. En la parte superior hay", 10, 140);
+            info.fillText("\"ladrillos\" o \"bloques\", que desaparecen al ser tocados por", 10, 160);
+            info.fillText("la bola. A causa de la popularidad del juego, cuatro versiones ", 10, 180);
+            info.fillText("se desarrollaron para el mercado de las máquinas arcade:", 10, 200);
+            info.fillText("Arkanoid, Tournament Arkanoid y Revenge of Doh ", 10, 220);
+            info.fillText("(Arkanoid II), ambas en 1987, y Arkanoid Returns en 1997.", 10, 240);
+            info.font = "20px Times New Roman";
+            info.fillText("Disfruta de Arkanoid.", 120, 330);
+            //audios
+            var rebote = document.getElementById("rebote");
+            var intro = document.getElementById("intro");
+            var roto = document.getElementById("roto");
+            var fin = document.getElementById("over");
+            //variables y objetos iniciales
+            var coordX;
+            var rotos = 0;
+            var nivel = 1;
+            var iniciado = false;
+            var Bola = new bola();
+            var mLadrillos = new matrizLadrillos(6);
+            var time = 0;
+            //Evitamos que al escalar no pierda calidad de imagen
+            contexto.imageSmoothingEnabled = false;
+            //Escalamos al doble
+            contexto.scale(2, 2);
+            //Llamamos a la función temporizador
+            temporizador();
+            /*
+             * Al cargar la pantalla llamamos a pintar con el temporizador requestAnimationFrame y ponemos musica inicial
+             * @returns {undefined}
+             */
+            window.onload = function () {
+                requestAnimationFrame(pintar);
+                intro.pause();
+                intro.currentTime = 0;
+                intro.play();
+            };
+            /*
+             * Función del nivel 2 en el que habrá más ladrillos y la velocidad aumentará.
+             * (Hay un botón para saltar a este nivel por si a la hora de corregir no tener 
+             * necesidad de repetir el nivel 1)
+             * @returns {undefined}
+             */
+            function nivel2() {
+                clearInterval(time);
+                alert("Comienza nivel 2 (Más bloques y velocidad)");
+                Bola.velX = 0;
+                Bola.velY = 0;
+                iniciado = false;
+                mLadrillos = new matrizLadrillos(9);
+                time = 0;
+                nivel = 2;
+                temporizador();
+                intro.pause();
+                intro.currentTime = 0;
+                intro.play();
+                rotos = 0;
+
+
+            }
+            ;
+            /*
+             * Función al finalizar el juego, tanto al perder como al ganar
+             * @returns {undefined}
+             */
+            function gameOver() {
+                Bola.coorY = 2000;
+                clearInterval(time);
+                fin.pause();
+                fin.currentTime = 0;
+                fin.play();
+                alert("GAME OVER");
+
+            }
+            ;
+
+            /*
+             * Función por la que la bola rebotará al chocar con las paredes y la pala. Además llamará
+             * a una función para ver que ladrillos se rompen y comprobará si perdemos o completamos el
+             * nivel
+             */
+            function actualizaBola() {
+                if (iniciado) {
+                    Bola.coorX += Bola.velX;
+                    Bola.coorY += Bola.velY;
+                    if (Bola.coorX <= 7) {
+                        Bola.velX = -Bola.velX;
+                    }
+                    if (Bola.coorX >= (contexto.canvas.width / 2) - 11) {
+                        Bola.velX = -Bola.velX;
+                    }
+                    if (Bola.coorY <= 7) {
+                        Bola.velY = -Bola.velY;
+
+                    }
+                    if ((Bola.coorX >= (coordX / 2) - 15 && Bola.coorX <= (coordX / 2) + 35) && (Bola.coorY >= 205 && Bola.coorY <= 215)) {
+                        Bola.velY = -Bola.velY;
+                        rebote.pause();
+                        rebote.currentTime = 0;
+                        rebote.play();
+                    }
+                } else {
+                    Bola.coorX = (coordX / 2) + 15;
+                    Bola.coorY = 205;
+                }
+                //Llamamos a la función que comprueba que ladrillos se rompen
+                destruccionLadrillos();
+                //Comprobamos si perdemos o pasamos de nivel
+                if (rotos >= mLadrillos.matriz.length * mLadrillos.matriz[1].length && nivel == 1) {
+                    nivel2();
+                }
+                if ((rotos >= mLadrillos.matriz.length * mLadrillos.matriz[1].length && nivel == 2) || (Bola.coorY >= 250)) {
+                    gameOver();
+                }
+
+            }
+
+            ;
+
+            /*
+             * Dibuja el fondo y los bordes
+             */
+            function crearPantalla(contexto) {
+                var imagen = new Image();
+                imagen.src = "hexagon_pattern.png";
+
+                var imagen2 = new Image();
+                imagen2.src = "border_top.png";
+
+                var imagen3 = new Image();
+                imagen3.src = "border_left.png";
+
+                var imagen4 = new Image();
+                imagen4.src = "border_right.png";
+
+
+                var ancho = document.getElementById("pantalla").width;
+                var alto = document.getElementById("pantalla").height;
+                contexto.drawImage(imagen, 0, 0, ancho, alto);
+
+                contexto.drawImage(imagen3, 0, 0);
+                contexto.drawImage(imagen4, 214, 0);
+                contexto.drawImage(imagen2, 0, 0);
+            }
+            ;
+            /*
+             * Función que dibujará la raqueta en la coordenada X del ratón y en una
+             * coordenada Y consstante.
+             */
+            function raqueta() {
+                var image = new Image();
+                image.src = "racket.png";
+                if (coordX == undefined) {
+                    contexto.drawImage(image, 100, 210, 35, 10);
+                } else {
+                    contexto.drawImage(image, coordX / 2, 210, 35, 10);
+                }
+            }
+            ;
+            /*
+             * Función encargada de dibujar la bola
+             */
+            function dibujaBola() {
+                var image = new Image();
+                image.src = "ball.png";
+                if (coordX == undefined) {
+                    contexto.drawImage(image, 115, 205);
+                } else {
+                    contexto.drawImage(image, Bola.coorX, Bola.coorY);
+                }
+            }
+            ;
+            /*
+             * Función encargada de dibujar los ladrillos que aún no se han roto
+             */
+            function dibujaLadrillo() {
+                contexto.fillStyle = "blue";
+                contexto.strokeStyle = "black";
+                for (var i = 0; i < mLadrillos.matriz.length; i++) {
+                    for (var j = 0; j < mLadrillos.matriz[i].length; j++) {
+                        if (mLadrillos.matriz[i][j].roto == false) {
+                            contexto.strokeRect(6.35 + i * (((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1), 50 + j * 8, ((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1, 8);
+
+                            if (j == 0) {
+                                contexto.fillStyle = "silver";
+                            } else if (j == 1) {
+                                contexto.fillStyle = "red";
+                            } else if (j == 2) {
+                                contexto.fillStyle = "yellow";
+                            } else if (j == 3) {
+                                contexto.fillStyle = "blue";
+                            } else if (j == 4) {
+                                contexto.fillStyle = "fuchsia";
+                            } else if (j == 5) {
+                                contexto.fillStyle = "lime";
+                            } else if (j == 6) {//a partir de aquí son las filas adicionales del nivel 2
+                                contexto.fillStyle = "indigo";
+                            } else if (j == 7) {
+                                contexto.fillStyle = "orangered";
+                            } else if (j == 8) {
+                                contexto.fillStyle = "white";
+                            }
+                            contexto.fillRect(6.7 + i * (((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1), 50 + j * 8, ((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1.65, 8);
+                        }
+                    }
+                }
+            }
+            ;
+
+            /*
+             * Función llamada con el temporizador "requestAnimationFrame" que se 
+             * encargará de llamar a todas las funciones destinadas a dibujar los
+             * distintos elementos del juego
+             */
+            function pintar() {
+                crearPantalla(contexto);
+                raqueta();
+                dibujaBola();
+                dibujaLadrillo();
+                requestAnimationFrame(pintar);
+            }
+            ;
+            /*
+             * Temporizador que llamará periódicamente a la función que actualizaBola
+             */
+            function temporizador() {
+                time = setInterval(actualizaBola, 1);
+
+            }
+            ;
+            /*
+             * Función que controla los eventos de ratón
+             */
+            function raton(e) {
+                var canvas = this.getBoundingClientRect();
+                coordX = e.pageX - canvas.left;
+
+                switch (e.type) {
+                    case "mousemove":
+                        if (coordX <= 15) {
+                            coordX = 15;
+                        } else if (coordX >= canvas.right - 93) {
+                            coordX = canvas.right - 93;
+                        }
+                        break;
+
+                    case "click":
+                        if (iniciado == false && nivel == 1) {
+                            iniciado = true;
+                            Bola.velX = 0.3;
+                            Bola.velY = -0.5;
+                        }
+                        if (iniciado == false && nivel == 2) {
+                            iniciado = true;
+                            Bola.velX = 0.5;
+                            Bola.velY = -0.8;
+                        }
+                        break;
+                }
+            }
+            ;
+            /*
+             * Constructor de bola
+             */
+            function bola() {
+                this.coorX = 115;
+                this.coorY = 205;
+                this.velX = 0;
+                this.velY = 0;
+            }
+            ;
+            /*
+             * Consttructor de ladrillo
+             */
+            function ladrillo() {
+                this.golpes = 1;//golpes necesarios para romperse
+                this.roto = false;
+            }
+            ;
+            /*
+             * Función que crea la matriz de los ladrillos
+             */
+            function matrizLadrillos(filas) {
+                this.filas = filas;
+                this.columnas = 13;
+                this.matriz = new Array(this.columnas);
+                for (var i = 0; i < this.columnas; i++) {
+                    this.matriz[i] = new Array(this.filas);
+                }
+                for (var i = 0; i < this.columnas; i++) {
+                    for (var j = 0; j < this.filas; j++) {
+                        this.matriz[i][j] = new ladrillo();
+                        if (j == 0) {
+                            this.matriz[i][j].golpes = 3;//los rectangulos de la primera fila necesitan 3 golpes para romperse
+                        }
+                    }
+                }
+            }
+            ;
+            /*
+             * Función encargada de controlar que ladrillos se rompen y cuales no
+             * además de controlar el rebote de la bola con los ladrillos
+             */
+            function destruccionLadrillos() {
+                var posX;
+                var posY;
+                var ancho = ((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1;
+                var alto = 8;
+                for (var i = 0; i < mLadrillos.matriz.length; i++) {
+                    for (var j = 0; j < mLadrillos.matriz[i].length; j++) {
+                        posX = 6.35 + i * (((contexto.canvas.width / mLadrillos.matriz.length) / 2) - 1);
+                        posY = 50 + j * 8;
+
+                        if (!mLadrillos.matriz[i][j].roto) {
+                            if ((Bola.coorX >= posX && Bola.coorX <= posX + ancho) && (Bola.coorY >= posY && Bola.coorY <= posY + alto)) {
+                                mLadrillos.matriz[i][j].golpes -= 1;
+                                if (mLadrillos.matriz[i][j].golpes <= 0) {
+                                    mLadrillos.matriz[i][j].roto = true;
+                                    roto.pause();
+                                    roto.currentTime = 0;
+                                    roto.play();
+                                    rotos++;
+                                }
+                                if (Bola.coorX >= posX && Bola.coorX <= posX + 2) {//comprobacion izquierda
+                                    Bola.velX = -Bola.velX;
+                                }
+                                if (Bola.coorX <= posX + ancho && Bola.coorX >= posX + ancho - 2) {//comprobacion derecha
+                                    Bola.velX = -Bola.velX;
+
+                                }
+                                if (Bola.coorY >= posY && Bola.coorY <= posY + 2) {//comprobacion arriba
+                                    Bola.velY = -Bola.velY;
+                                }
+                                if (Bola.coorY <= posY + alto && Bola.coorY >= posY + alto - 2) {//comprobacion abajo
+                                    Bola.velY = -Bola.velY;
+                                }
+                            }
+
+                        }
+
+                    }
+                }
+            }
+
+
+
+
+
+        </script>
+    </body>
+</html>
